@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.poetry-cache/
+.env
+*.egg-info/
+.pytest_cache/
+dist/
+build/
+
+node_modules/
+.next/
+
+.DS_Store
