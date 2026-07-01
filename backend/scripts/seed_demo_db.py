@@ -1,7 +1,7 @@
 """Seeds the demo SaaS-metrics dataset and creates the read-only role the agent executes as."""
 import random
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 # Allow running as `python scripts/seed_demo_db.py` from backend/ without installing the package.
@@ -88,7 +88,7 @@ def build_dataset(n_customers=200):
         })
         this_sub_id, sub_id = sub_id, sub_id + 1
 
-        end = canceled_at or datetime.utcnow()
+        end = canceled_at or datetime.now(timezone.utc).replace(tzinfo=None)
         cursor = started_at
         while cursor < end and PLANS[plan] > 0:
             paid = random.random() > 0.05
