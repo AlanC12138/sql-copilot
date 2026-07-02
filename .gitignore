@@ -13,3 +13,5 @@ node_modules/
 .next/
 
 .DS_Store
+
+backend/eval/results.json
