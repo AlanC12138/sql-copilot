@@ -7,11 +7,11 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-start: ## Start Postgres (in the background)
-	docker compose up -d postgres
+start: ## Start Postgres instances (demo DB on 5432, app DB on 5433)
+	docker compose up -d postgres app_db
 
-stop: ## Stop Postgres
-	docker compose stop postgres
+stop: ## Stop all Postgres instances
+	docker compose stop postgres app_db
 
 seed: ## Seed the demo dataset and read-only role
 	cd backend && poetry run python scripts/seed_demo_db.py

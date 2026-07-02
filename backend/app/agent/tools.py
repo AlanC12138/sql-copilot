@@ -1,9 +1,8 @@
 """Tool schemas (Anthropic tool-use format) and their Python implementations."""
-from sqlalchemy import inspect
+from sqlalchemy import Engine, inspect
 
 from app.agent.sandbox import SandboxError, run_query
 from app.config import settings
-from app.db.demo_engine import get_demo_engine
 
 TOOL_SCHEMAS = [
     {
@@ -35,13 +34,11 @@ TOOL_SCHEMAS = [
 ]
 
 
-def list_tables() -> dict:
-    engine = get_demo_engine()
+def list_tables(engine: Engine) -> dict:
     return {"tables": inspect(engine).get_table_names(schema="public")}
 
 
-def get_schema(table_name: str) -> dict:
-    engine = get_demo_engine()
+def get_schema(engine: Engine, table_name: str) -> dict:
     inspector = inspect(engine)
     available = inspector.get_table_names(schema="public")
     if table_name not in available:
@@ -66,8 +63,7 @@ def get_schema(table_name: str) -> dict:
     }
 
 
-def run_sql(query: str) -> dict:
-    engine = get_demo_engine()
+def run_sql(engine: Engine, query: str) -> dict:
     try:
         result = run_query(
             engine,
@@ -80,8 +76,7 @@ def run_sql(query: str) -> dict:
         return {"error": str(exc)}
     except Exception as exc:
         # A structurally valid SELECT can still fail at the DB level (unknown column,
-        # type mismatch, etc). Surface it as a tool error so the agent loop can feed it
-        # back to the model for a retry instead of the request crashing.
+        # type mismatch, etc). Surface it as a tool error so the agent can retry once.
         return {"error": f"Query failed: {exc}"}
 
     return {
@@ -92,11 +87,11 @@ def run_sql(query: str) -> dict:
     }
 
 
-def call_tool(name: str, tool_input: dict) -> dict:
+def call_tool(name: str, tool_input: dict, engine: Engine) -> dict:
     if name == "list_tables":
-        return list_tables()
+        return list_tables(engine)
     if name == "get_schema":
-        return get_schema(**tool_input)
+        return get_schema(engine, **tool_input)
     if name == "run_sql":
-        return run_sql(**tool_input)
+        return run_sql(engine, **tool_input)
     return {"error": f"Unknown tool: {name}"}

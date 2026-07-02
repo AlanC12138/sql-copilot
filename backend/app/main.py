@@ -1,37 +1,24 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
-from pydantic import BaseModel
 
-from app.agent.loop import run_agent
-
-app = FastAPI(title="SQL Copilot")
-
-
-class ChatRequest(BaseModel):
-    question: str
+from app.db.app_engine import get_app_engine
+from app.models.tables import metadata as app_metadata
+from app.routers import chat, connections
 
 
-class ChatResponse(BaseModel):
-    answer: str
-    sql: str | None = None
-    columns: list[str] | None = None
-    rows: list[list] | None = None
-    truncated: bool = False
-    failed: bool = False
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app_metadata.create_all(get_app_engine())
+    yield
+
+
+app = FastAPI(title="SQL Copilot", lifespan=lifespan)
+
+app.include_router(chat.router)
+app.include_router(connections.router)
 
 
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
-
-
-@app.post("/chat", response_model=ChatResponse)
-def chat(request: ChatRequest) -> ChatResponse:
-    result = run_agent(request.question)
-    return ChatResponse(
-        answer=result.answer,
-        sql=result.sql,
-        columns=result.columns,
-        rows=result.rows,
-        truncated=result.truncated,
-        failed=result.failed,
-    )

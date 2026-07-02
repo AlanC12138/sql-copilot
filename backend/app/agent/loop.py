@@ -4,12 +4,12 @@ from functools import lru_cache
 from typing import Any
 
 import anthropic
+from sqlalchemy import Engine
 
 from app.agent.tools import TOOL_SCHEMAS, call_tool
 from app.config import settings
 
-SYSTEM_PROMPT = """You are a data analyst assistant with read-only access to a SaaS \
-metrics database (tables: customers, subscriptions, invoices, events).
+SYSTEM_PROMPT = """You are a data analyst assistant with read-only access to a database.
 
 Always call `list_tables` and `get_schema` before writing SQL unless you already know \
 the exact schema from earlier in this conversation. Write a single PostgreSQL SELECT \
@@ -38,7 +38,11 @@ def _get_client() -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
 
-def run_agent(question: str, max_turns: int | None = None) -> AgentResult:
+def run_agent(question: str, engine: Engine | None = None, max_turns: int | None = None) -> AgentResult:
+    if engine is None:
+        from app.db.demo_engine import get_demo_engine
+        engine = get_demo_engine()
+
     client = _get_client()
     max_turns = max_turns or settings.agent_max_turns
 
@@ -74,7 +78,7 @@ def run_agent(question: str, max_turns: int | None = None) -> AgentResult:
             if block.type != "tool_use":
                 continue
 
-            result = call_tool(block.name, block.input)
+            result = call_tool(block.name, block.input, engine)
             trace.append({"tool": block.name, "input": block.input, "result": result})
 
             if block.name == "run_sql":
@@ -92,8 +96,6 @@ def run_agent(question: str, max_turns: int | None = None) -> AgentResult:
                 "is_error": "error" in result,
             })
 
-        # First run_sql failure: feed it back below so the model gets exactly one retry.
-        # Second consecutive failure: stop instead of letting the model keep guessing.
         if consecutive_sql_failures >= 2:
             return AgentResult(
                 answer=(
