@@ -1,7 +1,7 @@
 import json
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Any
+from typing import Any, Generator
 
 import anthropic
 from sqlalchemy import Engine
@@ -38,16 +38,22 @@ def _get_client() -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
 
-def run_agent(question: str, engine: Engine | None = None, max_turns: int | None = None) -> AgentResult:
-    if engine is None:
-        from app.db.demo_engine import get_demo_engine
-        engine = get_demo_engine()
+def _resolve_engine(engine: Engine | None) -> Engine:
+    if engine is not None:
+        return engine
+    from app.db.demo_engine import get_demo_engine
+    return get_demo_engine()
 
+
+def run_agent_stream(
+    question: str, engine: Engine | None = None, max_turns: int | None = None
+) -> Generator[dict, None, None]:
+    """Yield SSE-compatible event dicts as the agent works through the question."""
+    engine = _resolve_engine(engine)
     client = _get_client()
     max_turns = max_turns or settings.agent_max_turns
 
     messages: list[dict] = [{"role": "user", "content": question}]
-    trace: list[dict] = []
     last_sql: str | None = None
     last_result: dict | None = None
     consecutive_sql_failures = 0
@@ -64,22 +70,26 @@ def run_agent(question: str, engine: Engine | None = None, max_turns: int | None
 
         if response.stop_reason != "tool_use":
             answer = "".join(block.text for block in response.content if block.type == "text")
-            return AgentResult(
-                answer=answer,
-                sql=last_sql,
-                columns=(last_result or {}).get("columns"),
-                rows=(last_result or {}).get("rows"),
-                truncated=(last_result or {}).get("truncated", False),
-                trace=trace,
-            )
+            yield {
+                "type": "answer",
+                "answer": answer,
+                "sql": last_sql,
+                "columns": (last_result or {}).get("columns"),
+                "rows": (last_result or {}).get("rows"),
+                "truncated": (last_result or {}).get("truncated", False),
+            }
+            return
 
         tool_results = []
         for block in response.content:
             if block.type != "tool_use":
                 continue
 
+            yield {"type": "tool_call", "tool": block.name, "input": dict(block.input)}
+
             result = call_tool(block.name, block.input, engine)
-            trace.append({"tool": block.name, "input": block.input, "result": result})
+
+            yield {"type": "tool_result", "tool": block.name, "result": result}
 
             if block.name == "run_sql":
                 if "error" in result:
@@ -97,19 +107,55 @@ def run_agent(question: str, engine: Engine | None = None, max_turns: int | None
             })
 
         if consecutive_sql_failures >= 2:
-            return AgentResult(
-                answer=(
+            yield {
+                "type": "answer",
+                "answer": (
                     "I couldn't write a working query for that after two attempts. "
                     "Could you rephrase the question or point me at specific tables/columns?"
                 ),
-                failed=True,
-                trace=trace,
-            )
+                "sql": None,
+                "columns": None,
+                "rows": None,
+                "truncated": False,
+                "failed": True,
+            }
+            return
 
         messages.append({"role": "user", "content": tool_results})
 
+    yield {
+        "type": "answer",
+        "answer": "I wasn't able to finish answering that within the allotted reasoning steps.",
+        "sql": None,
+        "columns": None,
+        "rows": None,
+        "truncated": False,
+        "failed": True,
+    }
+
+
+def run_agent(question: str, engine: Engine | None = None, max_turns: int | None = None) -> AgentResult:
+    engine = _resolve_engine(engine)
+    trace: list[dict] = []
+    last_event: dict | None = None
+
+    for event in run_agent_stream(question, engine=engine, max_turns=max_turns):
+        trace.append(event)
+        last_event = event
+
+    if last_event and last_event["type"] == "answer":
+        return AgentResult(
+            answer=last_event["answer"],
+            sql=last_event.get("sql"),
+            columns=last_event.get("columns"),
+            rows=last_event.get("rows"),
+            truncated=last_event.get("truncated", False),
+            failed=last_event.get("failed", False),
+            trace=trace,
+        )
+
     return AgentResult(
-        answer="I wasn't able to finish answering that within the allotted reasoning steps.",
+        answer="Agent finished without producing an answer.",
         failed=True,
         trace=trace,
     )
