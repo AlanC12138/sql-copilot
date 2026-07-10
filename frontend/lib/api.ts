@@ -4,9 +4,17 @@ export type StreamEvent =
   | { type: "tool_call"; tool: string; input: Record<string, unknown> }
   | { type: "tool_result"; tool: string; result: Record<string, unknown> }
   | { type: "answer"; answer: string; sql: string | null; columns: string[] | null; rows: unknown[][] | null; truncated: boolean }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "limit_exceeded"; message: string };
 
 export type Connection = { id: string; name: string; created_at: string };
+
+export type BillingStatus = {
+  tier: "free" | "pro";
+  subscription_status: string | null;
+  usage_this_month: number;
+  monthly_limit: number | null;
+};
 
 export async function* streamChat(
   question: string,
@@ -73,4 +81,30 @@ export async function deleteConnection(token: string, id: string): Promise<void>
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`API error ${res.status}`);
+}
+
+export async function getBillingStatus(token: string): Promise<BillingStatus> {
+  const res = await fetch(`${API_URL}/billing/status`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+  return res.json();
+}
+
+export async function createCheckoutSession(token: string): Promise<{ url: string }> {
+  const res = await fetch(`${API_URL}/billing/checkout`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+  return res.json();
+}
+
+export async function createPortalSession(token: string): Promise<{ url: string }> {
+  const res = await fetch(`${API_URL}/billing/portal`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+  return res.json();
 }

@@ -17,6 +17,7 @@ sqlparse = "^0.5"
 faker = "^33.0"
 cryptography = "^43.0"
 clerk-backend-api = "^1.0"
+stripe = "^15.3.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3"

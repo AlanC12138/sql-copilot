@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
-import { BarChart2, Database, MessageSquare } from "lucide-react";
+import { BarChart2, CreditCard, Database, MessageSquare } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "Chat", icon: MessageSquare },
   { href: "/settings/connections", label: "Connections", icon: Database },
+  { href: "/settings/billing", label: "Billing", icon: CreditCard },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

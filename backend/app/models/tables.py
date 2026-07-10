@@ -12,6 +12,10 @@ organizations = Table(
     Column("clerk_org_id", String, unique=True, nullable=False),
     Column("name", String, nullable=False),
     Column("created_at", DateTime(timezone=True), server_default=func.now()),
+    Column("tier", String, nullable=False, server_default="free"),
+    Column("stripe_customer_id", String, nullable=True),
+    Column("stripe_subscription_id", String, nullable=True),
+    Column("stripe_subscription_status", String, nullable=True),
 )
 
 db_connections = Table(

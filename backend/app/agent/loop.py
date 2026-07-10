@@ -46,12 +46,18 @@ def _resolve_engine(engine: Engine | None) -> Engine:
 
 
 def run_agent_stream(
-    question: str, engine: Engine | None = None, max_turns: int | None = None
+    question: str,
+    engine: Engine | None = None,
+    max_turns: int | None = None,
+    max_rows: int | None = None,
+    timeout_ms: int | None = None,
 ) -> Generator[dict, None, None]:
     """Yield SSE-compatible event dicts as the agent works through the question."""
     engine = _resolve_engine(engine)
     client = _get_client()
     max_turns = max_turns or settings.agent_max_turns
+    max_rows = max_rows or settings.free_tier_max_rows
+    timeout_ms = timeout_ms or settings.free_tier_statement_timeout_ms
 
     messages: list[dict] = [{"role": "user", "content": question}]
     last_sql: str | None = None
@@ -87,7 +93,7 @@ def run_agent_stream(
 
             yield {"type": "tool_call", "tool": block.name, "input": dict(block.input)}
 
-            result = call_tool(block.name, block.input, engine)
+            result = call_tool(block.name, block.input, engine, max_rows=max_rows, timeout_ms=timeout_ms)
 
             yield {"type": "tool_result", "tool": block.name, "result": result}
 
@@ -134,12 +140,20 @@ def run_agent_stream(
     }
 
 
-def run_agent(question: str, engine: Engine | None = None, max_turns: int | None = None) -> AgentResult:
+def run_agent(
+    question: str,
+    engine: Engine | None = None,
+    max_turns: int | None = None,
+    max_rows: int | None = None,
+    timeout_ms: int | None = None,
+) -> AgentResult:
     engine = _resolve_engine(engine)
     trace: list[dict] = []
     last_event: dict | None = None
 
-    for event in run_agent_stream(question, engine=engine, max_turns=max_turns):
+    for event in run_agent_stream(
+        question, engine=engine, max_turns=max_turns, max_rows=max_rows, timeout_ms=timeout_ms
+    ):
         trace.append(event)
         last_event = event
 

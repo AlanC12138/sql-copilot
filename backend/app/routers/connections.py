@@ -7,6 +7,7 @@ from sqlalchemy import select
 from app.auth.clerk import Claims
 from app.auth.crypto import decrypt, encrypt
 from app.db.app_engine import get_app_engine
+from app.models.org import get_or_create_org
 from app.models.tables import db_connections, organizations
 
 router = APIRouter(prefix="/connections", tags=["connections"])
@@ -23,17 +24,6 @@ class ConnectionOut(BaseModel):
     created_at: str
 
 
-def _get_or_create_org(conn, clerk_org_id: str, name: str) -> uuid.UUID:
-    row = conn.execute(
-        select(organizations.c.id).where(organizations.c.clerk_org_id == clerk_org_id)
-    ).first()
-    if row:
-        return row.id
-    new_id = uuid.uuid4()
-    conn.execute(organizations.insert().values(id=new_id, clerk_org_id=clerk_org_id, name=name))
-    return new_id
-
-
 @router.post("", response_model=ConnectionOut, status_code=status.HTTP_201_CREATED)
 def create_connection(body: ConnectionCreate, claims: Claims):
     clerk_org_id = claims.get("org_id")
@@ -42,7 +32,7 @@ def create_connection(body: ConnectionCreate, claims: Claims):
 
     engine = get_app_engine()
     with engine.begin() as conn:
-        org_id = _get_or_create_org(conn, clerk_org_id, claims.get("org_slug", clerk_org_id))
+        org_id = get_or_create_org(conn, clerk_org_id, claims.get("org_slug", clerk_org_id))
         row_id = uuid.uuid4()
         conn.execute(db_connections.insert().values(
             id=row_id,

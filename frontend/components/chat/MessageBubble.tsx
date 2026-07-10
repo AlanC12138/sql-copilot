@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight, AlertCircle, Bot, User } from "lucide-react";
+import Link from "next/link";
+import { ChevronDown, ChevronRight, AlertCircle, Sparkles, Bot, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ResultTable } from "./ResultTable";
 import { ResultChart } from "./ResultChart";
 
 export type Message =
   | { role: "user"; content: string }
-  | { role: "assistant"; content: string; sql?: string | null; columns?: string[] | null; rows?: unknown[][] | null; truncated?: boolean; failed?: boolean }
+  | { role: "assistant"; content: string; sql?: string | null; columns?: string[] | null; rows?: unknown[][] | null; truncated?: boolean; failed?: boolean; limitExceeded?: boolean }
   | { role: "status"; content: string };
 
 export function MessageBubble({ message }: { message: Message }) {
@@ -48,7 +49,18 @@ export function MessageBubble({ message }: { message: Message }) {
             <span>Agent could not complete the query.</span>
           </div>
         )}
+        {message.limitExceeded && (
+          <div className="flex items-center gap-2 text-primary text-sm mb-2">
+            <Sparkles className="w-4 h-4" />
+            <span>Free tier limit reached</span>
+          </div>
+        )}
         <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+        {message.limitExceeded && (
+          <Link href="/settings/billing" className="text-sm text-primary underline underline-offset-2 mt-1 inline-block">
+            Upgrade to Pro →
+          </Link>
+        )}
 
         {message.sql && (
           <div className="mt-3">

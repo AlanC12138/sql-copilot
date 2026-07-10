@@ -63,13 +63,13 @@ def get_schema(engine: Engine, table_name: str) -> dict:
     }
 
 
-def run_sql(engine: Engine, query: str) -> dict:
+def run_sql(engine: Engine, query: str, max_rows: int, timeout_ms: int) -> dict:
     try:
         result = run_query(
             engine,
             query,
-            max_rows=settings.sandbox_max_rows,
-            timeout_ms=settings.sandbox_statement_timeout_ms,
+            max_rows=max_rows,
+            timeout_ms=timeout_ms,
             max_cost=settings.sandbox_max_plan_cost,
         )
     except SandboxError as exc:
@@ -87,11 +87,11 @@ def run_sql(engine: Engine, query: str) -> dict:
     }
 
 
-def call_tool(name: str, tool_input: dict, engine: Engine) -> dict:
+def call_tool(name: str, tool_input: dict, engine: Engine, max_rows: int, timeout_ms: int) -> dict:
     if name == "list_tables":
         return list_tables(engine)
     if name == "get_schema":
         return get_schema(engine, **tool_input)
     if name == "run_sql":
-        return run_sql(engine, **tool_input)
+        return run_sql(engine, max_rows=max_rows, timeout_ms=timeout_ms, **tool_input)
     return {"error": f"Unknown tool: {name}"}
