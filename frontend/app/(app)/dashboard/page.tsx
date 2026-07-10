@@ -72,9 +72,6 @@ export default function DashboardPage() {
             rows: event.rows ?? undefined,
             truncated: event.truncated,
           });
-        } else if (event.type === "error") {
-          removeLastStatus();
-          push({ role: "assistant", content: event.message, failed: true });
         } else if (event.type === "limit_exceeded") {
           removeLastStatus();
           push({ role: "assistant", content: event.message, limitExceeded: true });

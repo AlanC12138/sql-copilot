@@ -1,9 +1,10 @@
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Generator
 
 import anthropic
+from langfuse import Langfuse
 from sqlalchemy import Engine
 
 from app.agent.tools import TOOL_SCHEMAS, call_tool
@@ -30,12 +31,21 @@ class AgentResult:
     rows: list[list[Any]] | None = None
     truncated: bool = False
     failed: bool = False
-    trace: list[dict] = field(default_factory=list)
 
 
 @lru_cache
 def _get_client() -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=settings.anthropic_api_key)
+
+
+@lru_cache
+def _get_langfuse() -> Langfuse:
+    # No-ops safely (NoOpTracer) if public_key/secret_key aren't configured.
+    return Langfuse(
+        public_key=settings.langfuse_public_key,
+        secret_key=settings.langfuse_secret_key,
+        host=settings.langfuse_host,
+    )
 
 
 def _resolve_engine(engine: Engine | None) -> Engine:
@@ -55,6 +65,7 @@ def run_agent_stream(
     """Yield SSE-compatible event dicts as the agent works through the question."""
     engine = _resolve_engine(engine)
     client = _get_client()
+    lf = _get_langfuse()
     max_turns = max_turns or settings.agent_max_turns
     max_rows = max_rows or settings.free_tier_max_rows
     timeout_ms = timeout_ms or settings.free_tier_statement_timeout_ms
@@ -64,80 +75,104 @@ def run_agent_stream(
     last_result: dict | None = None
     consecutive_sql_failures = 0
 
-    for _ in range(max_turns):
-        response = client.messages.create(
-            model=settings.claude_model,
-            max_tokens=1024,
-            system=SYSTEM_PROMPT,
-            tools=TOOL_SCHEMAS,
-            messages=messages,
-        )
-        messages.append({"role": "assistant", "content": response.content})
+    try:
+        with lf.start_as_current_observation(as_type="agent", name="sql-copilot-agent", input=question) as agent_span:
+            for turn in range(max_turns):
+                with lf.start_as_current_observation(
+                    as_type="generation", name=f"claude-turn-{turn}",
+                    model=settings.claude_model, input=messages,
+                ) as generation:
+                    response = client.messages.create(
+                        model=settings.claude_model,
+                        max_tokens=1024,
+                        system=SYSTEM_PROMPT,
+                        tools=TOOL_SCHEMAS,
+                        messages=messages,
+                    )
+                    generation.update(
+                        output=[block.model_dump() for block in response.content],
+                        usage_details={
+                            "input": response.usage.input_tokens,
+                            "output": response.usage.output_tokens,
+                        },
+                    )
+                messages.append({"role": "assistant", "content": response.content})
 
-        if response.stop_reason != "tool_use":
-            answer = "".join(block.text for block in response.content if block.type == "text")
+                if response.stop_reason != "tool_use":
+                    answer = "".join(block.text for block in response.content if block.type == "text")
+                    agent_span.update(output=answer)
+                    yield {
+                        "type": "answer",
+                        "answer": answer,
+                        "sql": last_sql,
+                        "columns": (last_result or {}).get("columns"),
+                        "rows": (last_result or {}).get("rows"),
+                        "truncated": (last_result or {}).get("truncated", False),
+                    }
+                    return
+
+                tool_results = []
+                for block in response.content:
+                    if block.type != "tool_use":
+                        continue
+
+                    yield {"type": "tool_call", "tool": block.name, "input": dict(block.input)}
+
+                    with lf.start_as_current_observation(
+                        as_type="tool", name=block.name, input=dict(block.input)
+                    ) as tool_obs:
+                        result = call_tool(block.name, block.input, engine, max_rows=max_rows, timeout_ms=timeout_ms)
+                        tool_obs.update(output=result)
+
+                    yield {"type": "tool_result", "tool": block.name, "result": result}
+
+                    if block.name == "run_sql":
+                        if "error" in result:
+                            consecutive_sql_failures += 1
+                        else:
+                            consecutive_sql_failures = 0
+                            last_sql = block.input.get("query")
+                            last_result = result
+
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": json.dumps(result, default=str),
+                        "is_error": "error" in result,
+                    })
+
+                if consecutive_sql_failures >= 2:
+                    answer = (
+                        "I couldn't write a working query for that after two attempts. "
+                        "Could you rephrase the question or point me at specific tables/columns?"
+                    )
+                    agent_span.update(output=answer, level="WARNING")
+                    yield {
+                        "type": "answer",
+                        "answer": answer,
+                        "sql": None,
+                        "columns": None,
+                        "rows": None,
+                        "truncated": False,
+                        "failed": True,
+                    }
+                    return
+
+                messages.append({"role": "user", "content": tool_results})
+
+            answer = "I wasn't able to finish answering that within the allotted reasoning steps."
+            agent_span.update(output=answer, level="WARNING")
             yield {
                 "type": "answer",
                 "answer": answer,
-                "sql": last_sql,
-                "columns": (last_result or {}).get("columns"),
-                "rows": (last_result or {}).get("rows"),
-                "truncated": (last_result or {}).get("truncated", False),
-            }
-            return
-
-        tool_results = []
-        for block in response.content:
-            if block.type != "tool_use":
-                continue
-
-            yield {"type": "tool_call", "tool": block.name, "input": dict(block.input)}
-
-            result = call_tool(block.name, block.input, engine, max_rows=max_rows, timeout_ms=timeout_ms)
-
-            yield {"type": "tool_result", "tool": block.name, "result": result}
-
-            if block.name == "run_sql":
-                if "error" in result:
-                    consecutive_sql_failures += 1
-                else:
-                    consecutive_sql_failures = 0
-                    last_sql = block.input.get("query")
-                    last_result = result
-
-            tool_results.append({
-                "type": "tool_result",
-                "tool_use_id": block.id,
-                "content": json.dumps(result, default=str),
-                "is_error": "error" in result,
-            })
-
-        if consecutive_sql_failures >= 2:
-            yield {
-                "type": "answer",
-                "answer": (
-                    "I couldn't write a working query for that after two attempts. "
-                    "Could you rephrase the question or point me at specific tables/columns?"
-                ),
                 "sql": None,
                 "columns": None,
                 "rows": None,
                 "truncated": False,
                 "failed": True,
             }
-            return
-
-        messages.append({"role": "user", "content": tool_results})
-
-    yield {
-        "type": "answer",
-        "answer": "I wasn't able to finish answering that within the allotted reasoning steps.",
-        "sql": None,
-        "columns": None,
-        "rows": None,
-        "truncated": False,
-        "failed": True,
-    }
+    finally:
+        lf.flush()
 
 
 def run_agent(
@@ -148,13 +183,11 @@ def run_agent(
     timeout_ms: int | None = None,
 ) -> AgentResult:
     engine = _resolve_engine(engine)
-    trace: list[dict] = []
     last_event: dict | None = None
 
     for event in run_agent_stream(
         question, engine=engine, max_turns=max_turns, max_rows=max_rows, timeout_ms=timeout_ms
     ):
-        trace.append(event)
         last_event = event
 
     if last_event and last_event["type"] == "answer":
@@ -165,11 +198,9 @@ def run_agent(
             rows=last_event.get("rows"),
             truncated=last_event.get("truncated", False),
             failed=last_event.get("failed", False),
-            trace=trace,
         )
 
     return AgentResult(
         answer="Agent finished without producing an answer.",
         failed=True,
-        trace=trace,
     )

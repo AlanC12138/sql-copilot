@@ -4,7 +4,6 @@ export type StreamEvent =
   | { type: "tool_call"; tool: string; input: Record<string, unknown> }
   | { type: "tool_result"; tool: string; result: Record<string, unknown> }
   | { type: "answer"; answer: string; sql: string | null; columns: string[] | null; rows: unknown[][] | null; truncated: boolean }
-  | { type: "error"; message: string }
   | { type: "limit_exceeded"; message: string };
 
 export type Connection = { id: string; name: string; created_at: string };

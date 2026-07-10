@@ -49,12 +49,12 @@
 
 | Concern | Choice | Notes |
 |---|---|---|
-| LLM/agent tracing | Langfuse (self-hosted, Docker) | Purpose-built for tool-call traces, token cost, latency, per-conversation replay — a generic log table doesn't capture this for an agent |
+| LLM/agent tracing | Langfuse (Cloud, free tier) | Purpose-built for tool-call traces, token cost, latency, per-conversation replay — a generic log table doesn't capture this for an agent. Originally planned as self-hosted, but Langfuse's self-host stack grew to 6 containers (Postgres, ClickHouse, Redis, MinIO, web, worker) by the time Phase 6 started — not worth the footprint for a single-dev portfolio project, so Cloud's free tier is used instead. Still swappable to self-hosted later since the SDK talks to any Langfuse-compatible host. |
 | Eval harness | Custom Python script, fixed 50 NL→SQL pairs, exact-match + execution-match scoring | Run via `make eval`; the quantifiable artifact and the regression guard for prompt iteration |
 
 ## Infra
 
 | Concern | Choice | Notes |
 |---|---|---|
-| Local dev | Docker Compose | Postgres (+ Langfuse from Phase 6) |
-| Deploy | Fly.io or Render | Cloud SaaS target, not desktop packaging |
+| Local dev | Docker Compose | Postgres (demo + app DB); Langfuse tracing points at Cloud, no local container |
+| Deploy | Undecided, deferred | Fly.io was the original pick, but it dropped its free tier by the time Phase 6 started (card required, ~$4-15/mo). Render's free tier is card-free but the Postgres expires after 30 days. Not worth committing to either until this needs a real public URL. |

@@ -19,7 +19,7 @@ function isDateLike(val: unknown): boolean {
 export function ResultChart({ columns, rows }: ResultChartProps) {
   if (columns.length < 2 || rows.length < 2) return null;
 
-  const [labelCol, valueCol] = columns;
+  const valueCol = columns[1];
   const firstValue = rows[0]?.[1];
   if (!isNumeric(firstValue)) return null;
 

@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.auth.clerk import Claims
-from app.auth.crypto import decrypt, encrypt
+from app.auth.crypto import encrypt
 from app.db.app_engine import get_app_engine
 from app.models.org import get_or_create_org
 from app.models.tables import db_connections, organizations

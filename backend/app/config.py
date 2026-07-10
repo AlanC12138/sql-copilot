@@ -31,5 +31,9 @@ class Settings(BaseSettings):
     pro_tier_max_rows: int = 5000
     pro_tier_statement_timeout_ms: int = 15000
 
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_host: str = "https://cloud.langfuse.com"
+
 
 settings = Settings()
