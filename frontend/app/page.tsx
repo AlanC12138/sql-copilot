@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { SignedIn, SignedOut } from "@clerk/nextjs";
-import { Button } from "@/components/ui/button";
+import { auth } from "@clerk/nextjs/server";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const features = [
   { title: "Natural language → SQL", body: "Ask questions in plain English. The agent writes and runs the SQL for you." },
@@ -9,19 +10,22 @@ const features = [
   { title: "Multi-tenant & secure", body: "Organizations, per-tenant DB connections, and credentials encrypted at rest with Fernet." },
 ];
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const { userId } = await auth();
+
   return (
     <div className="flex flex-col min-h-screen">
       <header className="border-b px-6 py-4 flex items-center justify-between">
         <span className="font-semibold text-lg tracking-tight">SQL Copilot</span>
         <div className="flex gap-3">
-          <SignedOut>
-            <Button variant="ghost" asChild><Link href="/sign-in">Sign in</Link></Button>
-            <Button asChild><Link href="/sign-up">Get started</Link></Button>
-          </SignedOut>
-          <SignedIn>
-            <Button asChild><Link href="/dashboard">Go to app →</Link></Button>
-          </SignedIn>
+          {userId ? (
+            <Link href="/dashboard" className={cn(buttonVariants())}>Go to app →</Link>
+          ) : (
+            <>
+              <Link href="/sign-in" className={cn(buttonVariants({ variant: "ghost" }))}>Sign in</Link>
+              <Link href="/sign-up" className={cn(buttonVariants())}>Get started</Link>
+            </>
+          )}
         </div>
       </header>
 
@@ -35,13 +39,14 @@ export default function LandingPage() {
             safely against your database, and returns results as tables and charts — in seconds.
           </p>
           <div className="flex gap-4 justify-center">
-            <SignedOut>
-              <Button size="lg" asChild><Link href="/sign-up">Start for free</Link></Button>
-              <Button size="lg" variant="outline" asChild><Link href="/sign-in">Sign in</Link></Button>
-            </SignedOut>
-            <SignedIn>
-              <Button size="lg" asChild><Link href="/dashboard">Open dashboard →</Link></Button>
-            </SignedIn>
+            {userId ? (
+              <Link href="/dashboard" className={cn(buttonVariants({ size: "lg" }))}>Open dashboard →</Link>
+            ) : (
+              <>
+                <Link href="/sign-up" className={cn(buttonVariants({ size: "lg" }))}>Start for free</Link>
+                <Link href="/sign-in" className={cn(buttonVariants({ size: "lg", variant: "outline" }))}>Sign in</Link>
+              </>
+            )}
           </div>
         </section>
 
