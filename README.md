@@ -53,7 +53,7 @@ Accuracy held; the difference is within run-to-run variance. Brute-force discove
 ## Architecture
 
 ```
-Next.js (TS) ── marketing/landing (SSR) + app shell + chat UI (SSE)
+Next.js (TS) ── marketing/landing + pricing (SSR) + app shell + chat UI (SSE)
         │
         ├── Clerk (auth, orgs)
         ├── Stripe (billing UI: checkout, portal)

@@ -17,7 +17,8 @@ export default async function LandingPage() {
     <div className="flex flex-col min-h-screen">
       <header className="border-b px-6 py-4 flex items-center justify-between">
         <span className="font-semibold text-lg tracking-tight">SQL Copilot</span>
-        <div className="flex gap-3">
+        <div className="flex gap-3 items-center">
+          <Link href="/pricing" className={cn(buttonVariants({ variant: "ghost" }))}>Pricing</Link>
           {userId ? (
             <Link href="/dashboard" className={cn(buttonVariants())}>Go to app →</Link>
           ) : (
