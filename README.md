@@ -85,7 +85,7 @@ Copy `backend/.env.example` → `backend/.env` and `frontend/.env.local.example`
 | `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) | yes |
 | `CLERK_SECRET_KEY` / `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | [clerk.com](https://clerk.com) dashboard → API Keys (enable **Organizations**) | yes, unless `DISABLE_AUTH=true` for local-only testing |
 | `STRIPE_SECRET_KEY` / `STRIPE_PRICE_ID_PRO` / `STRIPE_WEBHOOK_SECRET` | [stripe.com](https://stripe.com) test mode → Product catalog + API keys; `stripe listen --forward-to localhost:8000/billing/webhook` for the webhook secret | only for testing billing |
-| `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` | [cloud.langfuse.com](https://cloud.langfuse.com) free tier → Project Settings → API Keys | only for tracing; agent runs fine without it |
+| `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_HOST` | Langfuse free tier → Project Settings → API Keys. **Set `LANGFUSE_HOST` to the data region your project lives in** (`cloud.langfuse.com` EU / `us.cloud.langfuse.com` US / `jp.cloud.langfuse.com` JP) — regions are fully isolated, so keys from one 401 against another | only for tracing; agent runs fine without it |
 
 Run the eval suite: `cd backend && poetry run python scripts/run_eval.py` (or `make eval`).
 
