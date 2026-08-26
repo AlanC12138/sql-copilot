@@ -4,7 +4,7 @@ import uuid
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import create_engine, select
+from sqlalchemy import case, create_engine, select
 
 from app.agent.loop import run_agent, run_agent_stream
 from app.auth.clerk import Claims
@@ -13,9 +13,13 @@ from app.billing.usage import get_monthly_usage
 from app.config import settings
 from app.db.app_engine import get_app_engine
 from app.db.demo_engine import get_demo_engine
+from app.models.org import get_or_create_org
 from app.models.tables import conversations, db_connections, messages, organizations
 
 router = APIRouter(tags=["chat"])
+
+# Cap replayed context so a long conversation can't grow the prompt without bound.
+HISTORY_MAX_MESSAGES = 20
 
 _TIER_LIMITS = {
     "free": (settings.free_tier_max_rows, settings.free_tier_statement_timeout_ms),
@@ -43,29 +47,57 @@ class ChatResponse(BaseModel):
     failed: bool = False
 
 
-def _resolve_engine(clerk_org_id: str | None):
+def _resolve_engine(clerk_org_id: str | None, org_name: str = ""):
     """Return (engine, org_id, tier). Falls back to the demo DB if org has no connection."""
     if not clerk_org_id:
         return get_demo_engine(), None, "free"
 
     app_engine = get_app_engine()
-    with app_engine.connect() as conn:
-        org_row = conn.execute(
-            select(organizations.c.id, organizations.c.tier).where(organizations.c.clerk_org_id == clerk_org_id)
-        ).first()
-        if not org_row:
-            return get_demo_engine(), None, "free"
+    with app_engine.begin() as conn:
+        # Create on first contact: otherwise a user who chats before ever opening
+        # settings/billing has no org row, so nothing they say gets persisted.
+        org_id = get_or_create_org(conn, clerk_org_id, org_name or clerk_org_id)
+        tier = conn.execute(
+            select(organizations.c.tier).where(organizations.c.id == org_id)
+        ).scalar_one()
 
         conn_row = conn.execute(
             select(db_connections.c.encrypted_url)
-            .where(db_connections.c.org_id == org_row.id)
+            .where(db_connections.c.org_id == org_id)
             .order_by(db_connections.c.created_at.desc())
             .limit(1)
         ).first()
 
     if conn_row:
-        return create_engine(decrypt(conn_row.encrypted_url)), org_row.id, org_row.tier
-    return get_demo_engine(), org_row.id, org_row.tier
+        return create_engine(decrypt(conn_row.encrypted_url)), org_id, tier
+    return get_demo_engine(), org_id, tier
+
+
+def _load_history(org_id, conv_id: str | None) -> list[dict]:
+    """Prior turns of this conversation, oldest first, capped to the most recent N."""
+    if org_id is None or not conv_id:
+        return []
+    try:
+        conv_uuid = uuid.UUID(conv_id)
+    except ValueError:
+        return []
+
+    # Both messages of a turn are inserted in one transaction, and Postgres `now()`
+    # is the transaction timestamp — so their created_at values are identical.
+    # Rank on role to keep the question ahead of its answer.
+    role_rank = case((messages.c.role == "user", 0), else_=1)
+
+    with get_app_engine().connect() as conn:
+        rows = conn.execute(
+            select(messages.c.role, messages.c.content)
+            .select_from(
+                messages.join(conversations, messages.c.conversation_id == conversations.c.id)
+            )
+            .where(conversations.c.id == conv_uuid, conversations.c.org_id == org_id)
+            .order_by(messages.c.created_at, role_rank)
+        ).fetchall()
+
+    return [{"role": r.role, "content": r.content} for r in rows][-HISTORY_MAX_MESSAGES:]
 
 
 def _over_free_tier_limit(org_id, tier: str) -> bool:
@@ -109,7 +141,8 @@ def _persist(org_id: uuid.UUID, clerk_user_id: str, conv_id: str | None, questio
 def chat_stream(question: str, claims: Claims, conversation_id: str | None = None):
     clerk_org_id = claims.get("org_id")
     clerk_user_id = claims.get("sub", "")
-    engine, org_id, tier = _resolve_engine(clerk_org_id)
+    engine, org_id, tier = _resolve_engine(clerk_org_id, claims.get("org_slug", ""))
+    history = _load_history(org_id, conversation_id)
 
     def event_gen():
         if _over_free_tier_limit(org_id, tier):
@@ -119,16 +152,20 @@ def chat_stream(question: str, claims: Claims, conversation_id: str | None = Non
 
         max_rows, timeout_ms = _TIER_LIMITS[tier]
         answer_event: dict | None = None
-        for event in run_agent_stream(question, engine=engine, max_rows=max_rows, timeout_ms=timeout_ms):
+        for event in run_agent_stream(
+            question, engine=engine, max_rows=max_rows, timeout_ms=timeout_ms, history=history
+        ):
             yield f"data: {json.dumps(event, default=str)}\n\n"
             if event.get("type") == "answer":
                 answer_event = event
 
         if org_id is not None and answer_event:
-            _persist(
+            conv_id = _persist(
                 org_id, clerk_user_id, conversation_id,
                 question, answer_event.get("answer", ""), answer_event.get("sql"),
             )
+            # The client needs this to send the next question into the same thread.
+            yield f"data: {json.dumps({'type': 'conversation', 'conversation_id': conv_id})}\n\n"
 
         yield "data: [DONE]\n\n"
 
@@ -141,12 +178,15 @@ def chat(request: ChatRequest, claims: Claims):
     clerk_org_id = claims.get("org_id")
     clerk_user_id = claims.get("sub", "")
 
-    engine, org_id, tier = _resolve_engine(clerk_org_id)
+    engine, org_id, tier = _resolve_engine(clerk_org_id, claims.get("org_slug", ""))
     if _over_free_tier_limit(org_id, tier):
         raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=LIMIT_EXCEEDED_MESSAGE)
 
+    history = _load_history(org_id, request.conversation_id)
     max_rows, timeout_ms = _TIER_LIMITS[tier]
-    result = run_agent(request.question, engine=engine, max_rows=max_rows, timeout_ms=timeout_ms)
+    result = run_agent(
+        request.question, engine=engine, max_rows=max_rows, timeout_ms=timeout_ms, history=history
+    )
 
     conv_id = None
     if org_id is not None:

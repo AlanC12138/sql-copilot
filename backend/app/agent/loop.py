@@ -61,8 +61,13 @@ def run_agent_stream(
     max_turns: int | None = None,
     max_rows: int | None = None,
     timeout_ms: int | None = None,
+    history: list[dict] | None = None,
 ) -> Generator[dict, None, None]:
-    """Yield SSE-compatible event dicts as the agent works through the question."""
+    """Yield SSE-compatible event dicts as the agent works through the question.
+
+    `history` is prior user/assistant turns from the same conversation, so the
+    agent can answer follow-ups ("now break that down by month") in context.
+    """
     engine = _resolve_engine(engine)
     client = _get_client()
     lf = _get_langfuse()
@@ -70,7 +75,7 @@ def run_agent_stream(
     max_rows = max_rows or settings.free_tier_max_rows
     timeout_ms = timeout_ms or settings.free_tier_statement_timeout_ms
 
-    messages: list[dict] = [{"role": "user", "content": question}]
+    messages: list[dict] = [*(history or []), {"role": "user", "content": question}]
     last_sql: str | None = None
     last_result: dict | None = None
     consecutive_sql_failures = 0
@@ -181,12 +186,14 @@ def run_agent(
     max_turns: int | None = None,
     max_rows: int | None = None,
     timeout_ms: int | None = None,
+    history: list[dict] | None = None,
 ) -> AgentResult:
     engine = _resolve_engine(engine)
     last_event: dict | None = None
 
     for event in run_agent_stream(
-        question, engine=engine, max_turns=max_turns, max_rows=max_rows, timeout_ms=timeout_ms
+        question, engine=engine, max_turns=max_turns, max_rows=max_rows,
+        timeout_ms=timeout_ms, history=history,
     ):
         last_event = event
 

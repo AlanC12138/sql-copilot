@@ -2,7 +2,7 @@
 
 import { useRef, useState, useCallback } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { Send } from "lucide-react";
+import { Plus, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { MessageBubble, type Message } from "@/components/chat/MessageBubble";
@@ -19,7 +19,13 @@ export default function DashboardPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const conversationId = useRef<string | undefined>(undefined);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  function newConversation() {
+    conversationId.current = undefined;
+    setMessages([]);
+  }
 
   const scrollToBottom = () => setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
 
@@ -59,8 +65,10 @@ export default function DashboardPage() {
 
       replaceLastStatus("Thinking…");
 
-      for await (const event of streamChat(question, token)) {
-        if (event.type === "tool_call") {
+      for await (const event of streamChat(question, token, conversationId.current)) {
+        if (event.type === "conversation") {
+          conversationId.current = event.conversation_id;
+        } else if (event.type === "tool_call") {
           replaceLastStatus(TOOL_LABELS[event.tool] ?? `Calling ${event.tool}…`);
         } else if (event.type === "answer") {
           removeLastStatus();
@@ -94,6 +102,13 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col h-full">
+      {messages.length > 0 && (
+        <div className="border-b px-6 py-2 flex justify-end">
+          <Button variant="ghost" size="sm" onClick={newConversation} disabled={loading}>
+            <Plus className="w-4 h-4" /> New chat
+          </Button>
+        </div>
+      )}
       <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground gap-3">
