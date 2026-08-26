@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { CreditCard, Sparkles } from "lucide-react";
@@ -8,7 +8,18 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { getBillingStatus, createCheckoutSession, createPortalSession, type BillingStatus } from "@/lib/api";
 
+// useSearchParams (for Stripe's ?success / ?canceled redirect) opts the subtree into
+// client-side rendering, which `next build` refuses to prerender without a Suspense
+// boundary. Keeping the boundary here lets the route stay statically prerenderable.
 export default function BillingPage() {
+  return (
+    <Suspense fallback={<div className="p-8 max-w-2xl text-sm text-muted-foreground">Loading billing…</div>}>
+      <BillingPanel />
+    </Suspense>
+  );
+}
+
+function BillingPanel() {
   const { getToken } = useAuth();
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<BillingStatus | null>(null);
