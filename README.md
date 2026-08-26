@@ -100,6 +100,11 @@ Copy `backend/.env.example` → `backend/.env` and `frontend/.env.local.example`
 
 Run the eval suite: `cd backend && poetry run python scripts/run_eval.py` (or `make eval`).
 
+Run the tests: `make test`. They cover the SQL sandbox, conversation-history replay
+and its tenant scoping, usage metering and tier gating, and the agent loop's control
+flow (the model and tools are stubbed, so no API credit is spent). Tests that need
+the app database skip cleanly if it isn't running.
+
 ## Deployment
 
 Not yet deployed publicly — runs locally per the instructions above. Fly.io was the original plan (see [TECH_STACK.md](TECH_STACK.md)), but it dropped its free tier by the time this phase started; picking a host wasn't worth committing to until this needs a real public URL.
