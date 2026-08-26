@@ -1,7 +1,7 @@
 # SQL Copilot — Common Commands
 # Run `make help` to see all available commands.
 
-.PHONY: help start stop seed dev test eval
+.PHONY: help start stop seed dev test eval seed-bench eval-bench
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -24,5 +24,11 @@ test: ## Run backend unit tests
 
 eval: ## Run the NL->SQL benchmark against the live agent
 	cd backend && poetry run python scripts/run_eval.py
+
+seed-bench: ## Seed the 220-table noisy benchmark database
+	cd backend && poetry run python scripts/seed_bench_db.py
+
+eval-bench: ## Run the benchmark against the noisy 220-table schema (schema-discovery stress test)
+	cd backend && poetry run python scripts/run_eval.py --target bench
 
 .DEFAULT_GOAL := help

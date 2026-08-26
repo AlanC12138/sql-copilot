@@ -21,7 +21,20 @@
 |---|---|---|
 | LLM | Claude (Anthropic SDK), provider abstracted behind an interface | Strong at multi-step tool-use loops, which is the core mechanic here. Swappable — the Phase 2 eval harness can benchmark alternatives empirically instead of by assertion |
 | Agent orchestration | Hand-rolled tool-use loop (no LangGraph) | The safety sandbox needs tight coupling to the tool-execution step (intercept SQL before running it); a thin custom loop gives more control than a framework would for a 3-tool, bounded-turn loop |
-| Schema RAG | pgvector | Schema metadata is small (tens–hundreds of vectors per tenant) — co-locating with relational tenant data in Postgres avoids running a second vector service for a workload this size |
+| Schema RAG | ~~pgvector~~ — **deferred, not built** | Originally planned (rationale: schema metadata is small, so co-locating vectors with relational tenant data in Postgres beats running a second vector service). Deferred after measuring whether it was needed — see below. The agent instead discovers schema by brute force, calling `list_tables` / `get_schema` per question. |
+
+### Why Schema RAG was deferred
+
+The plan assumed brute-force schema discovery would break on a realistic database. That was tested rather than assumed: `scripts/seed_bench_db.py` builds a 220-table warehouse-shaped schema (the 4 real tables plus 16 near-miss decoys and 200 noise tables), holding the data and the 50 gold queries constant so schema noise is the only variable.
+
+| | Clean (4 tables) | Noisy (220 tables) |
+|---|---|---|
+| Execution-match | 43/50 (86%) | 45/50 (90%) |
+| Cost per question | $0.0176 | $0.0317 |
+
+Accuracy held — the two runs are statistically indistinguishable (failure sets barely overlap, so run-to-run variance dominates). The real costs of brute-force discovery are (a) ~80% more spend per question, since the 220-name table list rides along in every turn's context, and (b) two new failure modes: one question exhausted the turn budget during discovery, and one found empty noise tables named `support_logs` / `int_support_logs` and confidently answered "no support tickets have been raised" while the real data sat in `events`.
+
+Those are real, but they're plausibly prompt/`agent_max_turns` problems rather than retrieval problems, and adding RAG would mean a second AI vendor (Anthropic ships no embeddings model — the docs point to Voyage AI), a pgvector index, and a schema-invalidation pipeline. Not worth that until there's a tenant whose schema actually defeats the current approach. Re-run `make eval-bench` to re-test the assumption.
 
 ## Data Storage
 

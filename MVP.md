@@ -43,7 +43,8 @@ Next.js (TS) ── marketing/pricing (SSR) + app shell + chat UI (SSE)
         ├── Stripe (billing UI)
         │
 FastAPI ─┬─ Agent loop (Claude, tool-use): list_tables / get_schema / run_sql
-         ├─ Schema RAG (pgvector)
+         ├─ (Schema RAG / pgvector — deferred; measured as unnecessary at 220 tables,
+         │   see TECH_STACK.md "Why Schema RAG was deferred")
          ├─ SQL sandbox: read-only role, SELECT-only, EXPLAIN guard, timeout, row cap
          ├─ Usage metering → Stripe usage records
          └─ Eval harness (`make eval`, 50-question NL→SQL benchmark)

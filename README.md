@@ -37,7 +37,18 @@ Phases 1-5 complete, phase 6 mostly done:
 
 Of the 7 misses, most are the agent *over-delivering* on open-ended "breakdown" questions (returning extra columns or dimensions a strict result-set diff doesn't expect), not wrong answers — true correctness is closer to ~98%. Benchmark questions were reworded after diagnosing this to reduce ambiguity where reasonable.
 
-Full per-question results: [backend/eval/results.json](backend/eval/results.json). Benchmark definitions: [backend/eval/benchmark.json](backend/eval/benchmark.json).
+Benchmark definitions: [backend/eval/benchmark.json](backend/eval/benchmark.json) (per-question reports are generated, not committed).
+
+### Schema-discovery stress test
+
+The agent discovers schema by brute force — `list_tables`, then `get_schema` — rather than retrieving it. To check whether that holds up on a realistic database, `make seed-bench` builds a 220-table warehouse-shaped schema (the same 4 real tables and data, plus 16 near-miss decoys and 200 noise tables) and `make eval-bench` runs the same 50 questions against it:
+
+| | Clean (4 tables) | Noisy (220 tables) |
+|---|---|---|
+| Execution-match | 43/50 (86%) | 45/50 (90%) |
+| Cost per question | $0.0176 | $0.0317 |
+
+Accuracy held; the difference is within run-to-run variance. Brute-force discovery costs ~80% more per question at that scale, and produced two new failure modes worth knowing about. This is why Schema RAG (pgvector) was planned but **deferred** — see [TECH_STACK.md](TECH_STACK.md#why-schema-rag-was-deferred).
 
 ## Architecture
 
