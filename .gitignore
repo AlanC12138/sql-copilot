@@ -14,4 +14,4 @@ node_modules/
 
 .DS_Store
 
-backend/eval/results.json
+backend/eval/results*.json

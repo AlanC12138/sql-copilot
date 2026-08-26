@@ -17,11 +17,25 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from sqlalchemy import create_engine
+
 from app.agent.loop import run_agent
+from app.config import settings
 from app.db.demo_engine import get_demo_engine
 
-BENCHMARK_PATH = Path(__file__).resolve().parents[1] / "eval" / "benchmark.json"
-REPORT_PATH = Path(__file__).resolve().parents[1] / "eval" / "results.json"
+EVAL_DIR = Path(__file__).resolve().parents[1] / "eval"
+BENCHMARK_PATH = EVAL_DIR / "benchmark.json"
+
+# The bench database holds the same four real tables and data as the demo dataset,
+# buried in warehouse-style noise — so the same gold SQL applies and the only
+# variable is how hard the schema is to discover. See scripts/seed_bench_db.py.
+TARGETS = {
+    "demo": ("results.json", lambda: get_demo_engine()),
+    "bench": (
+        "results-bench.json",
+        lambda: create_engine(settings.demo_database_url.rsplit("/", 1)[0] + "/sql_copilot_bench"),
+    ),
+}
 
 
 def normalize_sql(sql: str) -> str:
@@ -46,10 +60,9 @@ def run_gold(engine, sql: str) -> list[list]:
         return [list(row) for row in result.fetchall()]
 
 
-def evaluate_question(item: dict) -> dict:
-    engine = get_demo_engine()
+def evaluate_question(item: dict, engine) -> dict:
     gold_rows = run_gold(engine, item["sql"])
-    agent_result = run_agent(item["question"])
+    agent_result = run_agent(item["question"], engine=engine)
 
     record = {
         "id": item["id"],
@@ -80,15 +93,25 @@ def evaluate_question(item: dict) -> dict:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=None, help="Only run the first N questions")
+    parser.add_argument(
+        "--target", choices=sorted(TARGETS), default="demo",
+        help="Which database to run against: the clean demo schema or the noisy bench schema",
+    )
     args = parser.parse_args()
+
+    report_name, engine_factory = TARGETS[args.target]
+    report_path = EVAL_DIR / report_name
+    engine = engine_factory()
 
     benchmark = json.loads(BENCHMARK_PATH.read_text())
     if args.limit:
         benchmark = benchmark[: args.limit]
 
+    print(f"Target: {args.target}\n")
+
     results = []
     for item in benchmark:
-        record = evaluate_question(item)
+        record = evaluate_question(item, engine)
         results.append(record)
         mark = "PASS" if record["execution_match"] else "FAIL"
         print(f"[{mark}] #{record['id']:>2} {record['question']}")
@@ -104,8 +127,8 @@ def main():
     print(f"Execution-match accuracy: {executed}/{total} ({100 * executed / total:.1f}%)")
     print(f"Exact-match accuracy:     {exact}/{total} ({100 * exact / total:.1f}%)  (strict, phrasing-sensitive)")
 
-    REPORT_PATH.write_text(json.dumps(results, indent=2, default=str))
-    print(f"\nFull report written to {REPORT_PATH}")
+    report_path.write_text(json.dumps(results, indent=2, default=str))
+    print(f"\nFull report written to {report_path}")
 
 
 if __name__ == "__main__":
