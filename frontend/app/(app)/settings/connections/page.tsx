@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Trash2, Plus, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,13 +16,27 @@ export default function ConnectionsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function load() {
+  const fetchConnections = useCallback(async () => {
     const token = await getToken();
-    if (!token) return;
-    setConnections(await listConnections(token));
-  }
+    return token ? listConnections(token) : null;
+  }, [getToken]);
 
-  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // setState lands in the promise callback rather than the effect body, and the
+  // ignore flag drops a response that arrives after unmount. Without the catch, a
+  // backend that's down leaves the page blank on an unhandled rejection.
+  useEffect(() => {
+    let ignore = false;
+    fetchConnections()
+      .then((next) => { if (!ignore && next) setConnections(next); })
+      .catch(() => { if (!ignore) setError("Couldn't load your connections."); });
+    return () => { ignore = true; };
+  }, [fetchConnections]);
+
+  // Used after add/delete, where the component is definitely still mounted.
+  async function refresh() {
+    const next = await fetchConnections();
+    if (next) setConnections(next);
+  }
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -34,7 +48,7 @@ export default function ConnectionsPage() {
       await createConnection(token, name.trim(), url.trim());
       setName("");
       setUrl("");
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add connection");
     } finally {
@@ -46,7 +60,7 @@ export default function ConnectionsPage() {
     const token = await getToken();
     if (!token) return;
     await deleteConnection(token, id);
-    await load();
+    await refresh();
   }
 
   return (

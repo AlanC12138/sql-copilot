@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { CreditCard, Sparkles } from "lucide-react";
@@ -24,15 +24,26 @@ function BillingPanel() {
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<BillingStatus | null>(null);
   const [loading, setLoading] = useState(false);
+  // Kept separate from `error`: an action failure renders inside the plan card,
+  // but a load failure means there is no card, so it needs its own slot.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function load() {
+  const fetchStatus = useCallback(async () => {
     const token = await getToken();
-    if (!token) return;
-    setStatus(await getBillingStatus(token));
-  }
+    return token ? getBillingStatus(token) : null;
+  }, [getToken]);
 
-  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // setState lands in the promise callback rather than the effect body, and the
+  // ignore flag drops a response that arrives after unmount. Without the catch, a
+  // backend that's down leaves the page blank on an unhandled rejection.
+  useEffect(() => {
+    let ignore = false;
+    fetchStatus()
+      .then((next) => { if (!ignore && next) setStatus(next); })
+      .catch(() => { if (!ignore) setLoadError("Couldn't load your billing status. Is the API running?"); });
+    return () => { ignore = true; };
+  }, [fetchStatus]);
 
   async function handleUpgrade() {
     setError(null);
@@ -83,6 +94,8 @@ function BillingPanel() {
       {justCanceled && (
         <p className="text-sm text-muted-foreground mb-4">Checkout was canceled — no changes were made.</p>
       )}
+
+      {loadError && <p className="text-sm text-destructive mb-4">{loadError}</p>}
 
       {status && (
         <Card className="p-5 mb-6">
