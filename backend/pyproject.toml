@@ -2,7 +2,7 @@
 name = "sql-copilot-backend"
 version = "0.1.0"
 description = "Agentic text-to-SQL backend"
-authors = ["Alan Chen"]
+authors = ["Ying Lun Chen"]
 package-mode = false
 
 [tool.poetry.dependencies]
