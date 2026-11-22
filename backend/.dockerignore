@@ -1,0 +1,19 @@
+# The Dockerfile does `COPY . .`, so anything not excluded here ends up in the
+# image. Secrets are supplied at runtime (fly secrets / env vars) and must never
+# be baked into a layer — image layers are extractable.
+.env
+.env.*
+!.env.example
+
+# Bulk and build artefacts
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.poetry-cache/
+*.egg-info/
+
+# Not needed at runtime
+tests/
+eval/results*.json

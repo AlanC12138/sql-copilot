@@ -1,0 +1,11 @@
+# Secrets are supplied as build args / runtime secrets, never copied in.
+.env
+.env.*
+!.env.local.example
+
+# Reinstalled and rebuilt inside the image
+node_modules/
+.next/
+
+npm-debug.log*
+.DS_Store

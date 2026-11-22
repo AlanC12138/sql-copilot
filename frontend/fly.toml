@@ -1,0 +1,30 @@
+# Fly.io config for the SQL Copilot frontend.
+#
+# Change `app` if "sql-copilot-web" is already taken — Fly app names are global.
+#
+# NOTE: NEXT_PUBLIC_* values are compiled into the client bundle, so they are
+# passed as build args here rather than runtime secrets. Changing either one
+# requires a rebuild, not just `fly secrets set`:
+#
+#   fly deploy --build-arg NEXT_PUBLIC_API_URL=https://sql-copilot-api.fly.dev \
+#              --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+#
+# CLERK_SECRET_KEY is server-side only and belongs in `fly secrets set`.
+
+app = "sql-copilot-web"
+primary_region = "sea"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

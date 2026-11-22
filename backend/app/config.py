@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = ""
     stripe_price_id_pro: str = ""
     frontend_url: str = "http://localhost:3000"
+    # Comma-separated browser origins allowed to call this API. Must include the
+    # deployed frontend's origin or every request from it fails CORS.
+    cors_origins: str = "http://localhost:3000"
 
     free_tier_monthly_query_limit: int = 20
     free_tier_max_rows: int = 1000
