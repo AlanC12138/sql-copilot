@@ -70,4 +70,4 @@ Those are real, but they're plausibly prompt/`agent_max_turns` problems rather t
 | Concern | Choice | Notes |
 |---|---|---|
 | Local dev | Docker Compose | Postgres (demo + app DB); Langfuse tracing points at Cloud, no local container |
-| Deploy | Undecided, deferred | Fly.io was the original pick, but it dropped its free tier by the time Phase 6 started (card required, ~$4-15/mo). Render's free tier is card-free but the Postgres expires after 30 days. Not worth committing to either until this needs a real public URL. |
+| Deploy | Fly.io — configured, not yet launched | Re-checked in Nov 2026 after the Phase 6 deferral. Render is card-free but its free Postgres is **deleted ~44 days after creation**, so a portfolio link would silently break; Fly's free plan now covers one Managed Postgres (Developer, $4/mo) inside a $5/month allowance, and machines auto-stop when idle, which keeps a low-traffic demo's compute near zero. Caveat: exceed the $5 and the whole month bills at standard rates. `fly.toml` and Dockerfiles are committed and the images are verified to build and serve; the launch itself is pending. |

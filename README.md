@@ -26,7 +26,7 @@ Phases 1-5 complete, phase 6 mostly done:
 | 3 | Multi-tenant auth — Clerk, orgs, per-tenant DB connections, encrypted credentials | done |
 | 4 | Frontend — Next.js app shell, streaming chat (SSE), table/chart rendering | done |
 | 5 | Billing — Stripe, free/Pro tiers, usage caps | done |
-| 6 | Polish — Langfuse tracing, README + demo GIF, deploy | tracing + docs done; deploy deferred (see below) |
+| 6 | Polish — Langfuse tracing, README + demo GIF, deploy | tracing + docs done; deploy configured but not launched (see below) |
 
 ## Eval results
 
@@ -107,4 +107,8 @@ the app database skip cleanly if it isn't running.
 
 ## Deployment
 
-Not yet deployed publicly — runs locally per the instructions above. Fly.io was the original plan (see [TECH_STACK.md](TECH_STACK.md)), but it dropped its free tier by the time this phase started; picking a host wasn't worth committing to until this needs a real public URL.
+Configured for [Fly.io](https://fly.io) but not yet launched — it still runs locally per the instructions above. `backend/fly.toml`, `frontend/fly.toml` and both Dockerfiles are committed, and the images are verified to build and serve; see [TECH_STACK.md](TECH_STACK.md) for why Fly over Render.
+
+Machines are set to auto-stop when idle, so a low-traffic demo's compute stays near zero.
+
+**Before any public URL**, set `GLOBAL_MONTHLY_QUERY_LIMIT` *and* an Anthropic Console spend limit. The per-org free tier caps one tenant, but sign-up is open — auth is not a budget, and every question costs API credit.
