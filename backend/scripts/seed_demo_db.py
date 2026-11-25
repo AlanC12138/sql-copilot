@@ -11,6 +11,7 @@ from faker import Faker
 from sqlalchemy import (
     Column, Date, DateTime, ForeignKey, Integer, MetaData, String, Table, create_engine, text,
 )
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.config import settings
@@ -136,13 +137,27 @@ def main():
         conn.execute(invoices.insert(), invoice_rows)
         conn.execute(events.insert(), event_rows)
 
-        ensure_readonly_role(conn)
-
     print(
         f"Seeded {len(customer_rows)} customers, {len(subscription_rows)} subscriptions, "
         f"{len(invoice_rows)} invoices, {len(event_rows)} events."
     )
-    print("Read-only role 'copilot_readonly' ready.")
+
+    # Deliberately a separate transaction, and non-fatal. On a managed Postgres
+    # (Fly MPG, RDS, ...) the read-only role is created by the provider and its
+    # grants cannot be altered — "MPG system roles cannot be modified". Done in
+    # the transaction above, that failure rolled back the freshly seeded data.
+    with engine.begin() as conn:
+        try:
+            ensure_readonly_role(conn)
+            print("Read-only role 'copilot_readonly' ready.")
+        except ProgrammingError as exc:
+            if "InsufficientPrivilege" not in type(exc.orig).__name__:
+                raise
+            print(
+                "Skipped read-only role setup: this database manages roles itself "
+                f"({exc.orig}).\nEnsure the provider's read-only user exists and that "
+                "DEMO_DATABASE_URL points at it."
+            )
 
 
 if __name__ == "__main__":

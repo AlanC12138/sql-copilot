@@ -12,7 +12,7 @@
 # CLERK_SECRET_KEY is server-side only and belongs in `fly secrets set`.
 
 app = "sql-copilot-web"
-primary_region = "sea"
+primary_region = "sjc"
 
 [build]
   dockerfile = "Dockerfile"

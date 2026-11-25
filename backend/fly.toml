@@ -9,7 +9,7 @@
 # first request after a quiet period.
 
 app = "sql-copilot-api"
-primary_region = "sea"
+primary_region = "sjc"
 
 [build]
   dockerfile = "Dockerfile"
