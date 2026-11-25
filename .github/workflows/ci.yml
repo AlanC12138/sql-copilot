@@ -1,0 +1,103 @@
+name: CI
+
+# push + pull_request only. Never pull_request_target: it runs fork code with a
+# write token and this repo's secrets.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+
+    # Without a real Postgres the 17 DB-backed tests skip, and CI reports a pile
+    # of passes that prove far less than they look — tenant scoping and the usage
+    # window are only meaningful against the real database.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sql_copilot_app
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      APP_DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5433/sql_copilot_app
+      # No API keys: the agent-loop tests stub the model, so CI must never depend
+      # on a vendor's uptime or spend credit. A test that needs a key should skip.
+      ANTHROPIC_API_KEY: ""
+      LANGFUSE_PUBLIC_KEY: ""
+      LANGFUSE_SECRET_KEY: ""
+      ENCRYPTION_KEY: ""
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # Pinned to the version that generated poetry.lock — an unpinned install
+      # breaks months later when the lock format changes.
+      - name: Install Poetry 2.1.0
+        run: pipx install poetry==2.1.0
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Run tests
+        run: poetry run pytest -q
+
+      - name: Fail if database tests were skipped
+        # The suite skips DB tests when Postgres is unreachable, which is correct
+        # locally but would silently hollow out CI.
+        run: |
+          poetry run pytest -q 2>&1 | tee result.txt
+          if grep -q "skipped" result.txt; then
+            echo "::error::DB-backed tests skipped — the Postgres service is not reachable."
+            exit 1
+          fi
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        env:
+          # NEXT_PUBLIC_* are inlined at build time. These are placeholders so the
+          # build can complete; CI only needs to prove it compiles.
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2ktcGxhY2Vob2xkZXIk
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+        run: npm run build

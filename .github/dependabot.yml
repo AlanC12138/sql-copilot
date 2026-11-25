@@ -1,0 +1,37 @@
+version: 2
+
+# Monthly and grouped: weekly ungrouped updates on a solo project turn into
+# noise that gets ignored, which is worse than none. Semver-major is ignored so
+# a breaking bump never arrives as an unreviewed PR — those are upgraded by hand.
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: monthly
+    groups:
+      backend-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: monthly
+    groups:
+      frontend-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
