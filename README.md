@@ -17,7 +17,7 @@ See [MVP.md](MVP.md) for scope/phases and [TECH_STACK.md](TECH_STACK.md) for sta
 
 ## Status
 
-Phases 1-5 complete, phase 6 mostly done:
+All six phases complete and deployed at **https://sql-copilot-web.fly.dev**:
 
 | Phase | What | |
 |---|---|---|
@@ -26,7 +26,7 @@ Phases 1-5 complete, phase 6 mostly done:
 | 3 | Multi-tenant auth — Clerk, orgs, per-tenant DB connections, encrypted credentials | done |
 | 4 | Frontend — Next.js app shell, streaming chat (SSE), table/chart rendering | done |
 | 5 | Billing — Stripe, free/Pro tiers, usage caps | done |
-| 6 | Polish — Langfuse tracing, README + demo GIF, deploy | tracing + docs done; deploy configured but not launched (see below) |
+| 6 | Polish — Langfuse tracing, README + demo GIF, deploy | done — live on Fly.io |
 
 ## Eval results
 
@@ -107,8 +107,10 @@ the app database skip cleanly if it isn't running.
 
 ## Deployment
 
-Configured for [Fly.io](https://fly.io) but not yet launched — it still runs locally per the instructions above. `backend/fly.toml`, `frontend/fly.toml` and both Dockerfiles are committed, and the images are verified to build and serve; see [TECH_STACK.md](TECH_STACK.md) for why Fly over Render.
+Live on [Fly.io](https://fly.io) — **https://sql-copilot-web.fly.dev** (API at `sql-copilot-api.fly.dev`). See [TECH_STACK.md](TECH_STACK.md) for why Fly over Render.
 
-Machines are set to auto-stop when idle, so a low-traffic demo's compute stays near zero.
+Both apps run a single machine in `sjc`, beside one Managed Postgres cluster that holds the app database and the demo dataset. Machines auto-stop when idle, so a low-traffic demo's compute stays near zero — the tradeoff is a few seconds of cold start on the first request after a quiet period.
 
-**Before any public URL**, set `GLOBAL_MONTHLY_QUERY_LIMIT` *and* an Anthropic Console spend limit. The per-org free tier caps one tenant, but sign-up is open — auth is not a budget, and every question costs API credit.
+The demo dataset is queried through Fly's `reader` role, so the database itself refuses writes; the SQL sandbox's parser and keyword scan are defence in depth rather than the only barrier.
+
+**Spend is capped in two places**, because auth is not a budget — sign-up is open and every question costs API credit. `GLOBAL_MONTHLY_QUERY_LIMIT` bounds questions across all tenants, and an Anthropic Console workspace spend limit sits behind it as a ceiling no application bug can bypass.
