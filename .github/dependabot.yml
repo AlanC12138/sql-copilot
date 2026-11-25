@@ -10,8 +10,15 @@ updates:
       interval: monthly
     groups:
       backend-minor-patch:
+        applies-to: version-updates
         patterns: ["*"]
         update-types: ["minor", "patch"]
+      # A group without applies-to covers version updates only, which is why
+      # enabling Dependabot opened one PR per advisory. update-types is omitted
+      # deliberately: it has no effect on security updates.
+      backend-security:
+        applies-to: security-updates
+        patterns: ["*"]
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
@@ -22,8 +29,12 @@ updates:
       interval: monthly
     groups:
       frontend-minor-patch:
+        applies-to: version-updates
         patterns: ["*"]
         update-types: ["minor", "patch"]
+      frontend-security:
+        applies-to: security-updates
+        patterns: ["*"]
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
