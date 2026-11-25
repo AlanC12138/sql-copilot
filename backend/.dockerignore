@@ -17,3 +17,4 @@ __pycache__/
 # Not needed at runtime
 tests/
 eval/results*.json
+poetry.toml
