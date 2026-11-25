@@ -9,7 +9,7 @@ from sqlalchemy import case, create_engine, select
 from app.agent.loop import run_agent, run_agent_stream
 from app.auth.clerk import Claims
 from app.auth.crypto import decrypt
-from app.billing.usage import get_monthly_usage
+from app.billing.usage import get_global_monthly_usage, get_monthly_usage
 from app.config import settings
 from app.db.app_engine import get_app_engine
 from app.db.demo_engine import get_demo_engine
@@ -30,6 +30,23 @@ LIMIT_EXCEEDED_MESSAGE = (
     "You've used all of your free-tier questions for this month. "
     "Upgrade to Pro in Settings → Billing for unlimited questions."
 )
+
+BUDGET_EXCEEDED_MESSAGE = (
+    "This demo has reached its monthly query budget and will reset at the start "
+    "of next month. The code and benchmarks are all on GitHub in the meantime."
+)
+
+
+def _over_global_budget() -> bool:
+    """Spend backstop for the public demo — applies to every tier.
+
+    Deliberately not a billing tier: it bounds what the deployment can cost on a
+    public URL, where anyone can sign up and the per-org cap doesn't bind.
+    """
+    limit = settings.global_monthly_query_limit
+    if limit <= 0:
+        return False
+    return get_global_monthly_usage(get_app_engine()) >= limit
 
 
 class ChatRequest(BaseModel):
@@ -145,6 +162,11 @@ def chat_stream(question: str, claims: Claims, conversation_id: str | None = Non
     history = _load_history(org_id, conversation_id)
 
     def event_gen():
+        if _over_global_budget():
+            yield f"data: {json.dumps({'type': 'limit_exceeded', 'message': BUDGET_EXCEEDED_MESSAGE})}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
         if _over_free_tier_limit(org_id, tier):
             yield f"data: {json.dumps({'type': 'limit_exceeded', 'message': LIMIT_EXCEEDED_MESSAGE})}\n\n"
             yield "data: [DONE]\n\n"
@@ -179,6 +201,9 @@ def chat(request: ChatRequest, claims: Claims):
     clerk_user_id = claims.get("sub", "")
 
     engine, org_id, tier = _resolve_engine(clerk_org_id, claims.get("org_slug", ""))
+    if _over_global_budget():
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=BUDGET_EXCEEDED_MESSAGE)
+
     if _over_free_tier_limit(org_id, tier):
         raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=LIMIT_EXCEEDED_MESSAGE)
 

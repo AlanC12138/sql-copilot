@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
 
     free_tier_monthly_query_limit: int = 20
+    # Hard ceiling across ALL orgs, as a spend backstop for a public demo: the
+    # per-org free limit caps one tenant, but anyone can sign up again, so it is
+    # not a budget. 0 disables the ceiling (the default, for local use).
+    global_monthly_query_limit: int = 0
     free_tier_max_rows: int = 1000
     free_tier_statement_timeout_ms: int = 5000
     pro_tier_max_rows: int = 5000

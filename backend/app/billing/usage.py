@@ -18,3 +18,19 @@ def get_monthly_usage(engine: Engine, org_id: uuid.UUID) -> int:
             )
         ).scalar_one()
     return count
+
+
+def get_global_monthly_usage(engine: Engine) -> int:
+    """Count questions asked by every org this calendar month.
+
+    Backs the spend ceiling: the per-org limit caps a single tenant, but sign-up
+    is open, so only a total across all orgs bounds what a public demo can cost.
+    """
+    with engine.connect() as conn:
+        count = conn.execute(
+            select(func.count(messages.c.id)).where(
+                messages.c.role == "user",
+                messages.c.created_at >= func.date_trunc("month", func.now()),
+            )
+        ).scalar_one()
+    return count

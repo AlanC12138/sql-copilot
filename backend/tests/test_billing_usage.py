@@ -4,8 +4,8 @@ This is the number the free tier is enforced on, so it has to count the right ro
 for the right org — over-counting locks a paying-adjacent user out, under-counting
 gives the tier away.
 """
-from app.billing.usage import get_monthly_usage
-from app.routers.chat import _over_free_tier_limit
+from app.billing.usage import get_global_monthly_usage, get_monthly_usage
+from app.routers.chat import _over_free_tier_limit, _over_global_budget
 
 
 def test_new_org_has_no_usage(app_engine, make_org):
@@ -66,3 +66,34 @@ def test_pro_tier_is_never_blocked(make_org, add_turn, monkeypatch):
 def test_demo_path_without_an_org_is_never_blocked():
     # No org means nothing is persisted, so there's no usage to meter.
     assert _over_free_tier_limit(None, "free") is False
+
+
+def test_global_usage_spans_every_org(app_engine, make_org, add_turn):
+    # The per-org counter is what the free tier bills on; this one is the spend
+    # backstop, so it has to see across tenants.
+    before = get_global_monthly_usage(app_engine)
+    a, b = make_org(), make_org()
+    add_turn(a, "q", "a")
+    add_turn(b, "q", "a")
+
+    assert get_global_monthly_usage(app_engine) == before + 2
+
+
+def test_global_budget_disabled_by_default(monkeypatch):
+    import app.routers.chat as chat
+
+    monkeypatch.setattr(chat.settings, "global_monthly_query_limit", 0)
+    assert _over_global_budget() is False
+
+
+def test_global_budget_blocks_once_reached(app_engine, make_org, add_turn, monkeypatch):
+    import app.routers.chat as chat
+
+    make_org()  # ensure the table exists and usage is countable
+    current = get_global_monthly_usage(app_engine)
+
+    monkeypatch.setattr(chat.settings, "global_monthly_query_limit", current + 1)
+    assert _over_global_budget() is False, "under the ceiling should pass"
+
+    add_turn(make_org(), "q", "a")
+    assert _over_global_budget() is True, "at the ceiling should block every tier"
