@@ -1,9 +1,13 @@
+import logging
 from typing import Annotated
 
+from clerk_backend_api.jwks_helpers import VerifyTokenOptions, verify_token
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -24,14 +28,15 @@ def require_auth(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
 
     try:
-        from clerk_backend_api.jwks_helpers import TokenVerificationOptions, verify_token
-
-        payload = verify_token(
+        return verify_token(
             credentials.credentials,
-            TokenVerificationOptions(secret_key=settings.clerk_secret_key),
+            VerifyTokenOptions(secret_key=settings.clerk_secret_key),
         )
-        return payload
     except Exception as exc:
+        # Logged as well as returned: the detail reaches the browser, but a
+        # misconfiguration here (wrong key, unreachable JWKS) is indistinguishable
+        # from a genuinely bad token unless the server records why.
+        logger.warning("Clerk token verification failed: %s: %s", type(exc).__name__, exc)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
 
 
