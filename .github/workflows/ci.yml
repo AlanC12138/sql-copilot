@@ -59,16 +59,28 @@ jobs:
         run: pipx install poetry==2.1.0
 
       - name: Install dependencies
-        run: poetry install --no-interaction
+        # pipx runs Poetry on its own interpreter (3.14 on current runners), and
+        # Poetry builds the project venv with that unless told otherwise — which
+        # ignores setup-python entirely. On 3.14 there is no pydantic-core wheel,
+        # so it falls back to compiling Rust and PyO3 rejects the version. Bind
+        # the venv to the interpreter this job actually asked for.
+        run: |
+          poetry env use "$(which python)"
+          poetry env info --path
+          poetry install --no-interaction
 
       - name: Run tests
-        run: poetry run pytest -q
+        # pipefail matters: without it the exit status is tee's, so a failing
+        # test suite would report success.
+        run: |
+          set -o pipefail
+          poetry run pytest -q 2>&1 | tee result.txt
 
       - name: Fail if database tests were skipped
         # The suite skips DB tests when Postgres is unreachable, which is correct
-        # locally but would silently hollow out CI.
+        # locally but would silently hollow out CI. Reuses the run above rather
+        # than executing the suite a second time.
         run: |
-          poetry run pytest -q 2>&1 | tee result.txt
           if grep -q "skipped" result.txt; then
             echo "::error::DB-backed tests skipped — the Postgres service is not reachable."
             exit 1
