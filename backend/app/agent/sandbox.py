@@ -15,6 +15,7 @@ privilege boundary, not query parameterization.
 """
 import re
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any
 
 import sqlparse
@@ -63,6 +64,28 @@ def check_plan_cost(conn, sql: str, max_cost: float) -> None:
         )
 
 
+def _jsonable(value: Any) -> Any:
+    """Make one cell survive `json.dumps(..., default=str)` as a number.
+
+    Postgres returns NUMERIC as `Decimal`, which has no JSON representation, so
+    the fallback stringifies it — and `Decimal.__str__` keeps the scale the
+    server sent. `SUM(mrr_cents) / 100.0` over a zero group therefore reaches
+    both the model and the results table as the literal `"0E-20"`, and a whole
+    dollar amount as `"10978.000000000000"`.
+
+    Narrowing to int where the value is integral keeps the common money case
+    exact. Anything fractional becomes a float, which is lossy past 15-odd
+    significant digits — acceptable because JSON has no decimal type and these
+    values are headed for display, but it is the reason this does not try to
+    preserve Decimal all the way out.
+    """
+    if isinstance(value, Decimal):
+        if value == value.to_integral_value():
+            return int(value)
+        return float(value)
+    return value
+
+
 def run_query(engine: Engine, sql: str, max_rows: int, timeout_ms: int, max_cost: float) -> QueryResult:
     validate_select_only(sql)
 
@@ -77,6 +100,6 @@ def run_query(engine: Engine, sql: str, max_rows: int, timeout_ms: int, max_cost
         # client-side fetch is simpler and combines with the cost guard/timeout above.
         fetched = result.fetchmany(max_rows + 1)
         truncated = len(fetched) > max_rows
-        rows = [list(row) for row in fetched[:max_rows]]
+        rows = [[_jsonable(cell) for cell in row] for row in fetched[:max_rows]]
 
     return QueryResult(columns=columns, rows=rows, row_count=len(rows), truncated=truncated)
