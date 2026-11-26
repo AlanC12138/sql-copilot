@@ -11,6 +11,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege, set here rather than relying on the repo-wide default: this
+# workflow only reads the checkout. A job that ever needs to write something
+# (publish, comment, push a tag) should grant that scope on itself, not here.
+permissions:
+  contents: read
+
 jobs:
   backend:
     runs-on: ubuntu-latest

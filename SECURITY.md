@@ -46,6 +46,22 @@ These are known and deliberate for a demo of this kind — not oversights:
   the deployment across all tenants; an Anthropic Console spend limit is the
   backstop that a bug in this code cannot bypass.
 
+## Dependency policy
+
+`.github/dependabot.yml` ignores semver-major bumps, so a breaking change never
+arrives as an unreviewed PR. The cost is that an advisory whose fix is only in a
+new major stays open until someone upgrades by hand — and because a transitive
+pin can cap a direct dependency, that upgrade is sometimes not the package the
+alert names. `cryptography` sat six majors behind for exactly this reason:
+`clerk-backend-api` 1.x pinned it to `<44`, so clearing its advisories meant
+upgrading the Clerk SDK to 7.x first.
+
+`frontend/package.json` pins `minimatch` through `overrides`. Its advisory is a
+glob-amplification denial of service reachable only from ESLint and the `shadcn`
+CLI, neither of which runs in production, but the fix is a major that two
+transitive parents had not yet taken. The override is verified by lint and
+build, not assumed.
+
 ## Not in scope
 
 Denial of service, rate limiting, and anything requiring an authenticated

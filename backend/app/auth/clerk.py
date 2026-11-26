@@ -1,7 +1,9 @@
 import logging
 from typing import Annotated
 
-from clerk_backend_api.jwks_helpers import VerifyTokenOptions, verify_token
+# clerk-backend-api 7.x moved these out of `jwks_helpers` into `security`.
+# The call shape is unchanged: verify_token(token, VerifyTokenOptions(...)).
+from clerk_backend_api.security import VerifyTokenOptions, verify_token
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 

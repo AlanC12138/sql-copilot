@@ -17,7 +17,9 @@ from app.auth import clerk
 def test_sdk_exposes_the_options_class_we_import():
     # Guards the exact failure above: if the SDK renames this, fail here with a
     # clear message rather than as a 401 in production.
-    from clerk_backend_api.jwks_helpers import VerifyTokenOptions, verify_token
+    # 7.x moved these from `jwks_helpers` to `security`; this test is what
+    # caught that rename during the upgrade, which is the point of it.
+    from clerk_backend_api.security import VerifyTokenOptions, verify_token
 
     assert clerk.VerifyTokenOptions is VerifyTokenOptions
     assert clerk.verify_token is verify_token
