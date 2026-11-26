@@ -6,13 +6,14 @@ import { ChevronDown, ChevronRight, AlertCircle, Sparkles, Bot, User } from "luc
 import { Badge } from "@/components/ui/badge";
 import { ResultTable } from "./ResultTable";
 import { ResultChart } from "./ResultChart";
+import { Markdown } from "./Markdown";
 
 export type Message =
   | { role: "user"; content: string }
   | { role: "assistant"; content: string; sql?: string | null; columns?: string[] | null; rows?: unknown[][] | null; truncated?: boolean; failed?: boolean; limitExceeded?: boolean }
   | { role: "status"; content: string };
 
-export function MessageBubble({ message }: { message: Message }) {
+export function MessageBubble({ message, question }: { message: Message; question?: string }) {
   const [sqlOpen, setSqlOpen] = useState(false);
 
   if (message.role === "status") {
@@ -55,7 +56,7 @@ export function MessageBubble({ message }: { message: Message }) {
             <span>Free tier limit reached</span>
           </div>
         )}
-        <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+        <Markdown>{message.content}</Markdown>
         {message.limitExceeded && (
           <Link href="/settings/billing" className="text-sm text-primary underline underline-offset-2 mt-1 inline-block">
             Upgrade to Pro →
@@ -85,7 +86,7 @@ export function MessageBubble({ message }: { message: Message }) {
               <Badge variant="secondary" className="text-xs">{message.rows.length} row{message.rows.length !== 1 ? "s" : ""}</Badge>
             </div>
             <ResultTable columns={message.columns} rows={message.rows} truncated={message.truncated ?? false} />
-            <ResultChart columns={message.columns} rows={message.rows} />
+            <ResultChart columns={message.columns} rows={message.rows} question={question} />
           </>
         )}
       </div>

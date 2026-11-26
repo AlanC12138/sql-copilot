@@ -117,7 +117,17 @@ export default function DashboardPage() {
           </div>
         )}
         {messages.map((msg, i) => (
-          <MessageBubble key={i} message={msg} />
+          // The question is handed down so the chart can pick a column that
+          // answers it, rather than whichever one the agent SELECTed second.
+          <MessageBubble
+            key={i}
+            message={msg}
+            question={
+              msg.role === "assistant"
+                ? messages.slice(0, i).findLast((m) => m.role === "user")?.content
+                : undefined
+            }
+          />
         ))}
         <div ref={bottomRef} />
       </div>

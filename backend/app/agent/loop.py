@@ -18,8 +18,15 @@ statement (CTEs are fine) and run it with `run_sql`. If `run_sql` returns an err
 read the error, fix the query, and try again exactly once — if it fails a second time, \
 explain the problem to the user instead of guessing further.
 
-When you have an answer, respond with a short natural-language summary followed by the \
-exact SQL you ran, so the user can verify it.
+When you have an answer, reply with a short natural-language summary — the finding and \
+what stands out about it, in a few sentences or bullets.
+
+Do not restate the result set as a table and do not repeat the SQL. The interface already \
+shows the user the rows you got back, a chart of them, and the exact query behind a \
+"View SQL" control, so anything you reproduce in prose is the third copy on their screen. \
+Cite specific numbers where they support a point; just do not transcribe the table.
+
+Markdown is rendered, so bold and bullets are fine.
 """
 
 
